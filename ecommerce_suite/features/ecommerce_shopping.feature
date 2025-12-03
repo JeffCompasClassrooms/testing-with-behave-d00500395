@@ -1,81 +1,104 @@
-Feature: E-commerce Shopping Experience
-  Feature File for Test Suite 2: Feature-Rich Web Application (E-commerce)
-  Implements scenarios using custom-written, highly contextual step definitions.
+Feature: E-Commerce Shop Operations
+  As a shopper
+  I want to browse products, search, and manage my cart
+  So that I can purchase items I like
 
-  As an online shopper
-  I want to easily find products, add them to my cart, and check out securely
-  So that I can purchase goods without hassle
+  Background:
+    Given I navigate to the Automation Exercise homepage
 
-  @search @product
-  Scenario: Successful search and product detail viewing
-    Given I am viewing the "Home Goods" category page
-    When I search for "dress"
-    Then I should see the search results page
-    When I click the first product in the results
-    Then the current page URL should contain "/product_details/"
+  Scenario: View all products
+    When I navigate to the Products page
+    Then I should see the list of all products
+    And I should see the "ALL PRODUCTS" header
 
-  @cart @guest
-    Scenario: Adding a product to cart and verifying count
-      Given I am viewing the product page for "Blue Top"
-      When I add the product to my cart
-      Then the current page URL should contain "/view_cart"
+  Scenario: Search for a specific product
+    When I navigate to the Products page
+    And I search for the product "T-Shirt"
+    Then I should see "SEARCHED PRODUCTS" in the results
+    And all visible products should contain "T-Shirt" in their title
 
-  @cart @quantity
-  Scenario: Viewing cart after adding items
-    Given I have "Sample Product" in my cart with quantity "1"
-    Then the current page URL should contain "/view_cart"
+  Scenario: Verify Subscription in footer
+    When I scroll down to the footer
+    And I enter "subscriber@example.com" into the subscription input
+    And I click the subscribe arrow
+    Then I should see the subscription success message "You have been successfully subscribed!"
 
-  @checkout @guest
-  Scenario: Guest checkout process initiation
-    Given I have items in my cart
-    When I proceed to checkout
-    # UPDATED: Guests are redirected to login on this specific site
-    Then the current page URL should contain "/login"
+  Scenario: Add items to cart
+    Given the cart is empty
+    When I navigate to the Products page
+    And I hover over the first product and click Add to Cart
+    And I click Continue Shopping button
+    And I navigate to the Cart page
+    Then I should see 1 item in the cart
 
-  @checkout @discount
-  Scenario: Viewing payment review page
-    Given I am on the "Payment Review" page
-    And the current order subtotal is "$150.00"
-    Then the current page URL should contain "/checkout"
+  Scenario: Remove item from cart
+    Given the cart is empty
+    Given I have added a product to the cart
+    When I navigate to the Cart page
+    And I click the "X" button to remove the item
+    Then I should see that the cart is empty
 
-  @login @security
-  Scenario: Viewing login page
-    Given I am on the login page
-    Then the current page URL should contain "/login"
+  Scenario: View Category Products
+    When I click on the "Women" category
+    And I click on the "Dress" sub-category
+    Then I should see "WOMEN - DRESS PRODUCTS" in the page header
 
-  @login @security
-  Scenario: Attempting login with credentials
-    Given I am on the login page
-    When I log in with username "test@example.com" and password "password123"
-    Then the current page URL should contain "/"
+  Scenario: View Brand Products
+    When I navigate to the Products page
+    And I click on the "Polo" brand in the sidebar
+    Then I should see "BRAND - POLO PRODUCTS" in the page header
 
+  Scenario: Add review on product
+    When I navigate to the Products page
+    And I click View Product on the first item
+    And I submit a review with name "Reviewer", email "rev@test.com", and message "Great product!"
+    Then I should see the review success message "Thank you for your review."
 
+  Scenario: Verify Product Quantity in Cart
+    Given the cart is empty
+    When I navigate to the Products page
+    And I click View Product on the first item
+    And I increase the quantity to "4"
+    And I click the Add to Cart button
+    And I navigate to the Cart page
+    Then I should see "4" items in the cart for that product
 
-  @navigation @mobile
-  Scenario: Mobile menu functionality
-    Given I am viewing the page on a mobile device
-    When I click the mobile navigation menu
-    Then the element with id "navbar-nav" should be visible
+  Scenario: Verify Recommended Items are visible
+    When I scroll to the bottom of the page
+    Then I should see the "RECOMMENDED ITEMS" header
+    And I should see recommended products
 
-  @cart @empty
-  Scenario: Viewing an empty shopping cart
-    Given my cart is empty
-    Then the current page URL should contain "/view_cart"
+  Scenario: Add Recommended Item to Cart
+    Given the cart is empty
+    When I scroll to the bottom of the page
+    And I click Add to Cart on a recommended item
+    And I click View Cart in the modal
+    Then I should see 1 item in the cart
 
-  @product @search
-  Scenario: Search for specific product
-    Given I am viewing the homepage
-    When I search for "jeans"
-    Then I should see the search results page
+  Scenario: Verify Scroll Up using Arrow button
+    When I scroll to the bottom of the page
+    And I click the scroll up arrow
+    Then I should see the main slider text "Full-Fledged practice website for Automation Engineers"
 
-  @cart @view
-  Scenario: Navigate to cart page
-    Given I am viewing the homepage
-    When I click the cart icon
-    Then the current page URL should contain "/view_cart"
+  Scenario: Verify Scroll Up without Arrow button
+    When I scroll to the bottom of the page
+    And I scroll up to the top manually
+    Then I should see the main slider text "Full-Fledged practice website for Automation Engineers"
 
-  @login @navigation
-  Scenario: Navigate to login page from homepage
-    Given I am viewing the homepage
-    When I click the link "Signup / Login"
-    Then the current page URL should contain "/login"
+  Scenario: Proceed to Checkout (Non-Logged In)
+    Given the cart is empty
+    Given I have added a product to the cart
+    When I navigate to the Cart page
+    And I click Proceed to Checkout
+    Then I should see the checkout modal requesting login
+
+  Scenario: Search Products and Verify Cart After Login
+    Given the cart is empty
+    When I navigate to the Products page
+    And I search for the product "Jeans"
+    And I hover over the first product and click Add to Cart
+    And I click Continue Shopping button
+    And I navigate to the Login/Signup page
+    And I log in with email "testuser_unique@example.com" and password "password123"
+    And I navigate to the Cart page
+    Then I should see 1 item in the cart

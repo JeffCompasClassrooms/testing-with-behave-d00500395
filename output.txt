@@ -1,0 +1,134 @@
+Feature: E-Commerce Shop Operations # ecommerce_suite/features/ecommerce_shopping.feature:1
+  As a shopper
+  I want to browse products, search, and manage my cart
+  So that I can purchase items I like
+  Background:   # ecommerce_suite/features/ecommerce_shopping.feature:6
+
+  Scenario: View all products                            # ecommerce_suite/features/ecommerce_shopping.feature:9
+    Given I navigate to the Automation Exercise homepage # None
+    When I navigate to the Products page                 # None
+    Then I should see the list of all products           # None
+    And I should see the "ALL PRODUCTS" header           # None
+
+  Scenario: Search for a specific product                            # ecommerce_suite/features/ecommerce_shopping.feature:14
+    Given I navigate to the Automation Exercise homepage             # None
+    When I navigate to the Products page                             # None
+    And I search for the product "T-Shirt"                           # None
+    Then I should see "SEARCHED PRODUCTS" in the results             # None
+    And all visible products should contain "T-Shirt" in their title # None
+
+  Scenario: Verify Subscription in footer                                                       # ecommerce_suite/features/ecommerce_shopping.feature:20
+    Given I navigate to the Automation Exercise homepage                                        # None
+    When I scroll down to the footer                                                            # None
+    And I enter "subscriber@example.com" into the subscription input                            # None
+    And I click the subscribe arrow                                                             # None
+    Then I should see the subscription success message "You have been successfully subscribed!" # None
+
+  Scenario: Add items to cart                                # ecommerce_suite/features/ecommerce_shopping.feature:26
+    Given I navigate to the Automation Exercise homepage     # None
+    When I navigate to the Products page                     # None
+    And I hover over the first product and click Add to Cart # None
+    And I click Continue Shopping button                     # None
+    And I navigate to the Cart page                          # None
+    Then I should see 1 item in the cart                     # None
+
+  Scenario: Remove item from cart                        # ecommerce_suite/features/ecommerce_shopping.feature:33
+    Given I navigate to the Automation Exercise homepage # None
+    Given I have added a product to the cart             # None
+    When I navigate to the Cart page                     # None
+    And I click the "X" button to remove the item        # None
+    Then I should see that the cart is empty             # None
+
+  Scenario: View Category Products                                # ecommerce_suite/features/ecommerce_shopping.feature:39
+    Given I navigate to the Automation Exercise homepage          # None
+    When I click on the "Women" category                          # None
+    And I click on the "Dress" sub-category                       # None
+    Then I should see "WOMEN - DRESS PRODUCTS" in the page header # None
+
+  Scenario: View Brand Products                                  # ecommerce_suite/features/ecommerce_shopping.feature:44
+    Given I navigate to the Automation Exercise homepage         # None
+    When I navigate to the Products page                         # None
+    And I click on the "Polo" brand in the sidebar               # None
+    Then I should see "BRAND - POLO PRODUCTS" in the page header # None
+
+  Scenario: Add review on product                                                                  # ecommerce_suite/features/ecommerce_shopping.feature:49
+    Given I navigate to the Automation Exercise homepage                                           # None
+    When I navigate to the Products page                                                           # None
+    And I click View Product on the first item                                                     # None
+    And I submit a review with name "Reviewer", email "rev@test.com", and message "Great product!" # None
+    Then I should see the review success message "Thank you for your review."                      # None
+
+  Scenario: Verify Product Quantity in Cart                  # ecommerce_suite/features/ecommerce_shopping.feature:55
+    Given I navigate to the Automation Exercise homepage     # None
+    When I navigate to the Products page                     # None
+    And I click View Product on the first item               # None
+    And I increase the quantity to "4"                       # None
+    And I click the Add to Cart button                       # None
+    And I navigate to the Cart page                          # None
+    Then I should see "4" items in the cart for that product # None
+
+  Scenario: Verify Recommended Items are visible         # ecommerce_suite/features/ecommerce_shopping.feature:63
+    Given I navigate to the Automation Exercise homepage # None
+    When I scroll to the bottom of the page              # None
+    Then I should see the "RECOMMENDED ITEMS" header     # None
+    And I should see recommended products                # None
+
+  Scenario: Add Recommended Item to Cart                 # ecommerce_suite/features/ecommerce_shopping.feature:68
+    Given I navigate to the Automation Exercise homepage # None
+    When I scroll to the bottom of the page              # None
+    And I click Add to Cart on a recommended item        # None
+    And I click View Cart in the modal                   # None
+    Then I should see 1 item in the cart                 # None
+
+  Scenario: Verify Scroll Up using Arrow button                                                     # ecommerce_suite/features/ecommerce_shopping.feature:74
+    Given I navigate to the Automation Exercise homepage                                            # None
+    When I scroll to the bottom of the page                                                         # None
+    And I click the scroll up arrow                                                                 # None
+    Then I should see the main slider text "Full-Fledged practice website for Automation Engineers" # None
+
+  Scenario: Verify Scroll Up without Arrow button                                                   # ecommerce_suite/features/ecommerce_shopping.feature:79
+    Given I navigate to the Automation Exercise homepage                                            # None
+    When I scroll to the bottom of the page                                                         # None
+    And I scroll up to the top manually                                                             # None
+    Then I should see the main slider text "Full-Fledged practice website for Automation Engineers" # None
+
+  Scenario: Proceed to Checkout (Non-Logged In)           # ecommerce_suite/features/ecommerce_shopping.feature:84
+    Given I navigate to the Automation Exercise homepage  # None
+    Given I have added a product to the cart              # None
+    When I navigate to the Cart page                      # None
+    And I click Proceed to Checkout                       # None
+    Then I should see the checkout modal requesting login # None
+
+  Scenario: Search Products and Verify Cart After Login                              # ecommerce_suite/features/ecommerce_shopping.feature:90
+    Given I navigate to the Automation Exercise homepage                             # None
+    When I navigate to the Products page                                             # None
+    And I search for the product "Jeans"                                             # None
+    And I hover over the first product and click Add to Cart                         # None
+    And I click Continue Shopping button                                             # None
+    And I navigate to the Login/Signup page                                          # None
+    And I log in with email "testuser_unique@example.com" and password "password123" # None
+    And I navigate to the Cart page                                                  # None
+    Then I should see 1 item in the cart                                             # None
+
+
+Failing scenarios:
+  ecommerce_suite/features/ecommerce_shopping.feature:9  View all products
+  ecommerce_suite/features/ecommerce_shopping.feature:14  Search for a specific product
+  ecommerce_suite/features/ecommerce_shopping.feature:20  Verify Subscription in footer
+  ecommerce_suite/features/ecommerce_shopping.feature:26  Add items to cart
+  ecommerce_suite/features/ecommerce_shopping.feature:33  Remove item from cart
+  ecommerce_suite/features/ecommerce_shopping.feature:39  View Category Products
+  ecommerce_suite/features/ecommerce_shopping.feature:44  View Brand Products
+  ecommerce_suite/features/ecommerce_shopping.feature:49  Add review on product
+  ecommerce_suite/features/ecommerce_shopping.feature:55  Verify Product Quantity in Cart
+  ecommerce_suite/features/ecommerce_shopping.feature:63  Verify Recommended Items are visible
+  ecommerce_suite/features/ecommerce_shopping.feature:68  Add Recommended Item to Cart
+  ecommerce_suite/features/ecommerce_shopping.feature:74  Verify Scroll Up using Arrow button
+  ecommerce_suite/features/ecommerce_shopping.feature:79  Verify Scroll Up without Arrow button
+  ecommerce_suite/features/ecommerce_shopping.feature:84  Proceed to Checkout (Non-Logged In)
+  ecommerce_suite/features/ecommerce_shopping.feature:90  Search Products and Verify Cart After Login
+
+0 features passed, 1 failed, 0 skipped
+0 scenarios passed, 15 failed, 0 skipped
+0 steps passed, 0 failed, 9 skipped, 67 undefined
+Took 0m0.000s

@@ -1,579 +1,630 @@
-"""
-Custom step definitions for the E-commerce Shopping feature.
-These steps are highly contextual and combine multiple low-level actions
-into single, readable Gherkin steps.
-"""
-import time
 from behave import given, when, then
-from behave.runner import Context
-from selenium.common.exceptions import ElementClickInterceptedException, TimeoutException
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+from selenium.common.exceptions import ElementClickInterceptedException
 
-
-# --- Selectors for automationexercise.com ---
-SELECTORS = {
-    "search_input": '#search_product',
-    "search_button": '#submit_search',
-    "product_card": ".features_items .product-image-wrapper",
-    "product_link_first": ".features_items .product-image-wrapper:first-child a[href*='/product_details']",
-    "add_to_cart_button": ".btn.btn-default.add-to-cart",
-    "cart_icon": "a[href='/view_cart']",
-    "cart_count": ".shop-menu .badge",
-    "success_message": ".alert-success",
-    "warning_message": ".alert-warning",
-    "checkout_button": ".check_out",
-    "login_link": "a[href='/login']",
-    "username_field": "input[data-qa='login-email']",
-    "password_field": "input[data-qa='login-password']",
-    "login_submit_button": "button[data-qa='login-button']",
-    "user_greeting_header": ".shop-menu li a",
-    "total_price": ".cart_total_price",
-    "quantity_field": "input.cart_quantity_input",
-    "footer_link_support": "footer a[href='/contact_us']",
-    "mobile_menu_button": ".navbar-toggle",
-}
-
-BASE_URL = "https://automationexercise.com"
-
-def wait_for_element(context: Context, selector, timeout=10, by=By.CSS_SELECTOR):
-    """Wait until an element is visible."""
-    if hasattr(context.webdriver, 'is_mock') and context.webdriver.is_mock:
-        return context.webdriver.find_element(by, selector)
+def clear_cart(driver):
+    # Remove all items from the cart if present
     try:
-        return WebDriverWait(context.webdriver, timeout).until(
-            EC.presence_of_element_located((by, selector))
+        driver.get("https://automationexercise.com/view_cart")
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "cart_quantity_delete"))
         )
-    except TimeoutException as e:
-        # Capture artifacts for debugging: screenshot and page source
-        try:
-            import os, datetime
-            logs_dir = os.path.join(os.getcwd(), 'features', 'logs')
-            os.makedirs(logs_dir, exist_ok=True)
-            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            screenshot_path = os.path.join(logs_dir, f"timeout_{ts}.png")
-            html_path = os.path.join(logs_dir, f"timeout_{ts}.html")
-            context.webdriver.save_screenshot(screenshot_path)
-            with open(html_path, 'w', encoding='utf-8') as f:
-                f.write(context.webdriver.page_source)
-            print(f"[DEBUG] Timeout waiting for selector '{selector}'. Saved screenshot to {screenshot_path} and HTML to {html_path}.")
-        except Exception as save_err:
-            print(f"[DEBUG] Failed to save artifacts on timeout: {save_err}")
-        raise
+        delete_buttons = driver.find_elements(By.CLASS_NAME, "cart_quantity_delete")
+        for btn in delete_buttons:
+            try:
+                btn.click()
+                time.sleep(0.5)  # Wait for DOM update
+            except Exception:
+                pass
+    except Exception:
+        pass  # No items to delete or cart already empty
 
-def wait_for_clickable(context: Context, selector, timeout=10, by=By.CSS_SELECTOR):
-    """Wait until an element is clickable."""
-    if hasattr(context.webdriver, 'is_mock') and context.webdriver.is_mock:
-        return context.webdriver.find_element(by, selector)
+
+@given('the cart is empty')
+def given_cart_is_empty_step(context):
+    close_ads_iframe(context.behave_driver)
+    clear_cart(context.behave_driver)
+
+
+# --- Common / Navigation Steps ---
+
+@given('I navigate to the Automation Exercise homepage')
+def navigate_homepage_step(context):
+    driver = context.behave_driver
+    driver.get("https://automationexercise.com/")
+    close_ads_iframe(driver)
+    # WebDriverWait(driver, 10).until(
+    #     EC.visibility_of_element_located((By.XPATH, "//img[@alt='Website for automation practice']"))
+    # )
+
+@when('I navigate to the Login/Signup page')
+def navigate_login_signup_step(context):
+    driver = context.behave_driver
+    close_ads_iframe(driver)
     try:
-        return WebDriverWait(context.webdriver, timeout).until(
-            EC.element_to_be_clickable((by, selector))
-        )
-    except TimeoutException:
-        # Capture artifacts for debugging
+        elem = driver.find_element(By.CSS_SELECTOR, "a[href='/login']")
+        driver.execute_script("arguments[0].scrollIntoView();", elem)
         try:
-            import os, datetime
-            logs_dir = os.path.join(os.getcwd(), 'features', 'logs')
-            os.makedirs(logs_dir, exist_ok=True)
-            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            screenshot_path = os.path.join(logs_dir, f"timeout_clickable_{ts}.png")
-            html_path = os.path.join(logs_dir, f"timeout_clickable_{ts}.html")
-            context.webdriver.save_screenshot(screenshot_path)
-            with open(html_path, 'w', encoding='utf-8') as f:
-                f.write(context.webdriver.page_source)
-            print(f"[DEBUG] Timeout waiting for clickable selector '{selector}'. Saved screenshot to {screenshot_path} and HTML to {html_path}.")
-        except Exception as save_err:
-            print(f"[DEBUG] Failed to save artifacts on clickable timeout: {save_err}")
-        raise
-
-def click_element_safely(context, selector):
-
-    element = None 
-    try:
-        element = wait_for_clickable(context, selector)
-        context.webdriver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-        time.sleep(1)
-        element.click()
+            elem.click()
+        except ElementClickInterceptedException as e:
+            print(f"[WARN] Click intercepted: {e}. Trying JS click.")
+            driver.execute_script("arguments[0].click();", elem)
+        except Exception as e:
+            print(f"[ERROR] JS click also failed: {e}")
+            raise AssertionError("Could not click Login/Signup link.")
     except Exception as e:
-        if element:
-            print(f"Standard click failed. Forcing JS click on {selector}")
-            context.webdriver.execute_script("arguments[0].click();", element)
-        else:
-            raise e
+        raise AssertionError(f"Login/Signup link not found or not clickable: {e}")
 
-def scroll_to_element(context, selector):
-    """Scrolls the page until the element is in the viewport."""
-    element = context.webdriver.find_element(By.CSS_SELECTOR, selector)
-    context.webdriver.execute_script("arguments[0].scrollIntoView(true);", element)
+@when('I navigate to the Contact Us page')
+def navigate_contact_us_step(context):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "a[href='/contact_us']").click()
 
-@given('I am viewing the "{category}" category page')
-def step_viewing_category(context: Context, category):
-    """Navigates to the products page where the search bar is located."""
-    
-    context.webdriver.get(BASE_URL + "/products")
-    
-    try:
-        wait_for_element(context, SELECTORS["search_input"], timeout=5)
-    except:
-        print("Warning: Search input not immediately found, ad might be loading.")
-        
-    time.sleep(2)
+@when('I navigate to the Products page')
+def navigate_products_page_step(context):
+    driver = context.behave_driver
+    close_ads_iframe(driver)
+    driver.find_element(By.CSS_SELECTOR, "a[href='/products']").click()
 
-@given('I am viewing the product page for "{product_name}"')
-def step_viewing_product_page(context: Context, product_name):
-    """Navigates to a product page."""
-    context.webdriver.get(BASE_URL)
-    time.sleep(2)
+@when('I navigate to the Cart page')
+def navigate_cart_page_step(context):
+    driver = context.behave_driver
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            elem = driver.find_element(By.CSS_SELECTOR, "a[href='/view_cart']")
+            driver.execute_script("arguments[0].scrollIntoView();", elem)
+            try:
+                elem.click()
+                return
+            except Exception as e:
+                print(f"[WARN] Normal click failed: {e}. Trying JS click.")
+                try:
+                    driver.execute_script("arguments[0].click();", elem)
+                    return
+                except Exception as js_e:
+                    print(f"[ERROR] JS click also failed: {js_e}")
+                    time.sleep(1)
+        except Exception as retry_e:
+            print(f"[ERROR] Retry {attempt+1} failed to find/click Cart page link: {retry_e}")
+            time.sleep(1)
+    print(f"[ERROR] Could not click Cart page link after {max_retries} attempts.")
 
-@given('I have "{product_name}" in my cart with quantity "{quantity}"')
-def step_product_in_cart_with_qty(context: Context, product_name, quantity):
-    context.execute_steps(f'''
-        Given I am viewing the product page for "{product_name}"
-        When I add the product to my cart
-    ''')
-    
-    time.sleep(1)
-    context.webdriver.get(BASE_URL + "/view_cart")
-    
-    WebDriverWait(context.webdriver, 10).until(
-        EC.url_contains("/view_cart")
+@when('I click on the Test Cases button')
+def click_test_cases_button_step(context):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "a[href='/test_cases']").click()
+
+@then('I should be on the "Test Cases" page')
+def be_on_test_cases_page_step(context):
+    WebDriverWait(context.behave_driver, 5).until(
+        EC.url_contains("/test_cases")
     )
 
-@given('I have items in my cart')
-def step_have_items_in_cart(context: Context):
-    """Ensure the cart has at least one item and navigate to cart."""
-    context.execute_steps('''
-        Given I am viewing the product page for "Sample Product"
-        When I add the product to my cart
-    ''')
+@then('the page title should be "{title}"')
+def verify_page_title_step(context, title):
+    assert context.behave_driver.title == title
+
+# --- Account Management Steps ---
+
+@when('I enter "{name}" and "{email}" into the new user signup')
+def enter_new_user_signup_step(context, name, email):
+    # Appending timestamp to email to ensure uniqueness if needed
+    unique_email = email.replace("@", f"_{int(time.time())}@")
+    context.created_email = unique_email # Store for login steps if needed
     
-    time.sleep(1)
+    context.behave_driver.find_element(By.CSS_SELECTOR, "input[data-qa='signup-name']").send_keys(name)
+    context.behave_driver.find_element(By.CSS_SELECTOR, "input[data-qa='signup-email']").send_keys(unique_email)
+
+@when('I click the Signup button')
+def click_signup_button_step(context):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "button[data-qa='signup-button']").click()
+
+@when('I fill in the account details with password "{password}", first name "{first}", last name "{last}", and address "{address}"')
+def fill_account_details_step(context, password, first, last, address):
+    driver = context.behave_driver
+    # Select Title
+    driver.find_element(By.ID, "id_gender1").click()
     
-    context.webdriver.get(BASE_URL + "/view_cart")
+    driver.find_element(By.ID, "password").send_keys(password)
     
-    try:
-        WebDriverWait(context.webdriver, 10).until(
-            EC.url_contains("/view_cart")
-        )
-    except:
-        pass
-
-@given('my cart is empty')
-def step_cart_is_empty(context: Context):
-    """Navigates to the cart page."""
-    context.webdriver.get(BASE_URL + "/view_cart")
-    time.sleep(1)
-
-@given('I am on the login page')
-def step_on_login_page(context: Context):
-    """Navigates to the login page."""
-    context.webdriver.get(BASE_URL + "/login")
-    time.sleep(1)
-
-@given('I am logged in as "{username}"')
-def step_logged_in(context: Context, username):
-    """Simulates a successful login."""
-    context.username = username
-    context.execute_steps(f'''
-        Given I am on the login page
-        When I log in with username "{username}" and password "password123"
-    ''')
-
-@given('I am on the "{page_name}" page')
-def step_on_checkout_page(context: Context, page_name):
-    """Navigates to a specific page."""
-    context.webdriver.get(BASE_URL + "/checkout")
-    time.sleep(1)
-
-@given('the current order subtotal is "{price}"')
-def step_order_subtotal(context: Context, price):
-    """Sets context subtotal."""
-    context.subtotal = price
-
-@given('I have provided valid shipping and payment details')
-def step_provided_valid_details(context: Context):
-    """Navigates to payment page."""
-    context.webdriver.get(BASE_URL + "/payment")
-    time.sleep(1)
-
-@given('I have searched for "{query}"')
-def step_has_searched(context: Context, query):
-    """Performs a search action."""
-    context.execute_steps(f'''
-        Given I am viewing the homepage
-        When I search for "{query}"
-    ''')
-
-@given('I am viewing the page on a mobile device')
-def step_on_mobile_device(context: Context):
-    """Simulates mobile viewport."""
-    context.webdriver.set_window_size(400, 700)
-
-@given('I am viewing the homepage')
-def step_viewing_homepage(context: Context):
-    """
-    UPDATED: Navigates to /products because that is where the search bar
-    and most shopping features are located on this test site.
-    """
-    context.webdriver.get(BASE_URL + "/products")
-    try:
-        wait_for_element(context, SELECTORS["search_input"], timeout=5)
-    except:
-        pass
-    time.sleep(2)
-
-# --- WHEN Steps ---
-
-@when('I search for "{query}"')
-def step_search_for_item(context: Context, query):
-    """Performs search."""
-    try:
-        search_input = wait_for_element(context, SELECTORS["search_input"])
-        search_input.clear()
-        search_input.send_keys(query)
-        click_element_safely(context, SELECTORS["search_button"])
-        
-        time.sleep(2)
-    except Exception as e:
-        print(f"Search failed: {e}")
-        raise e
-
-@when('I click the first product in the results')
-def step_click_first_product(context: Context):
-    """Clicks the first product using safe click."""
-    try:
-        click_element_safely(context, SELECTORS["product_link_first"])
-        time.sleep(2)
-    except Exception as e:
-        print(f"Click first product failed: {e}")
-
-@when('I add the product to my cart')
-def step_add_to_cart(context: Context):
-    """
-    Adds the current product to the cart, handles click interception,
-    and then clicks the 'View Cart' link inside the success modal to navigate.
-    """
-    driver = context.webdriver
-    add_to_cart_selector = SELECTORS["add_to_cart_button"]
-    wait = WebDriverWait(driver, 15)
-
-    try:
-        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, add_to_cart_selector))).click()
-    except ElementClickInterceptedException:
-        element = driver.find_element(By.CSS_SELECTOR, add_to_cart_selector)
-        driver.execute_script("arguments[0].click();", element)
-
-    view_cart_in_modal_selector = "a[href='/view_cart']"
+    # Date of birth (generic selection)
+    driver.find_element(By.ID, "days").send_keys("1")
+    driver.find_element(By.ID, "months").send_keys("January")
+    driver.find_element(By.ID, "years").send_keys("2000")
     
-    try:
-        view_cart_link = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, view_cart_in_modal_selector))
-        )
-        view_cart_link.click()
-        
-    except TimeoutException:
-        print("Warning: 'Add to Cart' success modal did not appear or timed out.")
+    driver.find_element(By.ID, "first_name").send_keys(first)
+    driver.find_element(By.ID, "last_name").send_keys(last)
+    driver.find_element(By.ID, "address1").send_keys(address)
+    driver.find_element(By.ID, "country").send_keys("United States")
+    driver.find_element(By.ID, "state").send_keys("NY")
+    driver.find_element(By.ID, "city").send_keys("New York")
+    driver.find_element(By.ID, "zipcode").send_keys("10001")
+    driver.find_element(By.ID, "mobile_number").send_keys("1234567890")
 
-@when('I click the cart icon')
-def step_click_cart_icon(context: Context):
-    """Clicks the cart icon."""
-    try:
-        cart_link = wait_for_clickable(context, SELECTORS["cart_icon"])
-        cart_link.click()
-        time.sleep(2)
-    except Exception as e:
-        print(f"Click cart icon failed: {e}")
+@when('I click the Create Account button')
+def click_create_account_button_step(context):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "button[data-qa='create-account']").click()
 
-@when('I proceed to checkout')
-def step_proceed_to_checkout(context: Context):
-    checkout_selector = ".check_out"
-    
+@then('I should see the "{message}" success message')
+def see_success_message_step(context, message):
+    element = WebDriverWait(context.behave_driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "h2[data-qa='account-created']"))
+    )
+    assert message.lower() in element.text.lower()
+
+@when('I log in with email "{email}" and password "{password}"')
+def login_with_email_password_step(context, email, password):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "input[data-qa='login-email']").send_keys(email)
+    context.behave_driver.find_element(By.CSS_SELECTOR, "input[data-qa='login-password']").send_keys(password)
+    context.behave_driver.find_element(By.CSS_SELECTOR, "button[data-qa='login-button']").click()
+
+@then('I should see the logged in user "{username}" in the navbar')
+def see_logged_in_user_navbar_step(context, username):
+    element = WebDriverWait(context.behave_driver, 10).until(
+        EC.visibility_of_element_located((By.XPATH, "//*[contains(text(), 'Logged in as')]"))
+    )
+    assert username in element.text
+
+@then('I should see the error message "{message}"')
+def see_error_message_step(context, message):
+    element = context.behave_driver.find_element(By.CSS_SELECTOR, "form[action='/login'] p")
+    assert message in element.text
+
+@given('I am logged in with "{email}" and "{password}"')
+def given_logged_in_with_email_password_step(context, email, password):
+    # Reuse steps
+    context.execute_steps(u'''
+        When I navigate to the Login/Signup page
+        And I log in with email "{}" and password "{}"
+    '''.format(email, password))
+
+@when('I click the Logout button')
+def click_logout_button_step(context):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "a[href='/logout']").click()
+
+@then('I should be redirected to the Login page')
+def should_be_redirected_to_login_page_step(context):
+    WebDriverWait(context.behave_driver, 5).until(
+        EC.url_contains("/login")
+    )
+
+@when('I click the Delete Account button')
+def click_delete_account_button_step(context):
+    context.behave_driver.find_element(By.CSS_SELECTOR, "a[href='/delete_account']").click()
+
+@then('I should see the "Account Deleted!" confirmation')
+def see_account_deleted_confirmation_step(context):
+    WebDriverWait(context.behave_driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "h2[data-qa='account-deleted']"))
+    )
+
+# --- Contact Form Steps ---
+
+@when('I submit the contact form with name "{name}", email "{email}", subject "{subject}", and message "{msg}"')
+def step_impl(context, name, email, subject, msg):
+    context.behave_driver.find_element(By.NAME, "name").send_keys(name)
+    context.behave_driver.find_element(By.NAME, "email").send_keys(email)
+    context.behave_driver.find_element(By.NAME, "subject").send_keys(subject)
+    context.behave_driver.find_element(By.NAME, "message").send_keys(msg)
+    context.behave_driver.find_element(By.NAME, "submit").click()
+
+@when('I accept the browser alert')
+def accept_browser_alert_step(context):
+    WebDriverWait(context.behave_driver, 5).until(EC.alert_is_present())
+    context.behave_driver.switch_to.alert.accept()
+
+@then('I should see the success details "{message}"')
+def see_success_details_step(context, message):
+    element = WebDriverWait(context.behave_driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".status.alert.alert-success"))
+    )
+    assert message in element.text
+
+# --- Shop Operations Steps ---
+
+@then('I should see the list of all products')
+def see_list_of_all_products_step(context):
+    products = context.behave_driver.find_elements(By.CLASS_NAME, "features_items")
+    assert len(products) > 0
+
+def close_ads_iframe(driver):
+    # Hide ad iframes
     try:
-        btn = WebDriverWait(context.webdriver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, checkout_selector))
-        )
-        btn.click()
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        for iframe in iframes:
+            driver.execute_script("arguments[0].style.display='none';", iframe)
     except Exception:
-        btn = context.webdriver.find_element(By.CSS_SELECTOR, checkout_selector)
-        context.webdriver.execute_script("arguments[0].click();", btn)
-    
+        pass
+    # Try to click close button inside adsbygoogle overlays, else hide
     try:
-        modal_link = WebDriverWait(context.webdriver, 3).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".modal-body a[href='/login']"))
-        )
-        print("Guest checkout modal detected. Proceeding to Login.")
-        modal_link.click()
-    except:
+        ads = driver.find_elements(By.CSS_SELECTOR, "ins.adsbygoogle")
+        for ad in ads:
+            try:
+                close_btn = ad.find_element(By.CSS_SELECTOR, "[aria-label='Close'], .close, button, [role='button']")
+                if close_btn.is_displayed() and close_btn.is_enabled():
+                    close_btn.click()
+                    continue
+            except Exception:
+                pass
+            driver.execute_script("arguments[0].style.display='none';", ad)
+    except Exception:
         pass
 
-@when('I select the "{option}" option')
-def step_select_checkout_option(context: Context, option):
-    """Selects an option."""
-    print(f"Selecting option: {option}")
+@then('I should see the "{header_text}" header')
+def see_header_text_step(context, header_text):
+    driver = context.behave_driver
+    header = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "h2.title.text-center"))
+    )
+    assert header.is_displayed(), "Header is not visible."
 
-@when('I log in with username "{username}" and password "{password}"')
-def step_log_in(context: Context, username, password):
-    """Fills login form and submits."""
+@when('I search for the product "{product_name}"')
+def search_for_product_step(context, product_name):
+    context.behave_driver.find_element(By.ID, "search_product").send_keys(product_name)
+    context.behave_driver.find_element(By.ID, "submit_search").click()
+
+@then('I should see "SEARCHED PRODUCTS" in the results')
+def see_searched_products_in_results_step(context):
+    header = context.behave_driver.find_element(By.CSS_SELECTOR, "h2.title.text-center")
+    assert "SEARCHED PRODUCTS" in header.text
+
+@then('all visible products should contain "{text}" in their title')
+def all_visible_products_contain_text_step(context, text):
+    product_names = context.behave_driver.find_elements(By.CSS_SELECTOR, ".productinfo p")
+    for name in product_names:
+        assert text.lower() in name.text.lower()
+
+@when('I scroll down to the footer')
+def scroll_down_to_footer_step(context):
+    context.behave_driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+@when('I enter "{email}" into the subscription input')
+def enter_subscription_email_step(context, email):
+    context.behave_driver.find_element(By.ID, "susbscribe_email").send_keys(email)
+
+@when('I click the subscribe arrow')
+def click_subscribe_arrow_step(context):
+    context.behave_driver.find_element(By.ID, "subscribe").click()
+
+@then('I should see the subscription success message "{message}"')
+def see_subscription_success_message_step(context, message):
+    element = WebDriverWait(context.behave_driver, 5).until(
+        EC.visibility_of_element_located((By.ID, "success-subscribe"))
+    )
+    assert message in element.text
+
+@when('I hover over the first product and click Add to Cart')
+def hover_and_add_first_product_step(context):
+    # Robustly click the 'Add to cart' button for the first product, retrying if stale
+    from selenium.common.exceptions import StaleElementReferenceException, ElementClickInterceptedException
+    driver = context.behave_driver
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            product = driver.find_elements(By.CLASS_NAME, "single-products")[0]
+            driver.execute_script("arguments[0].scrollIntoView();", product)
+            actions = ActionChains(driver)
+            actions.move_to_element(product).perform()
+            add_btn = product.find_element(By.CSS_SELECTOR, ".product-overlay a.add-to-cart")
+            try:
+                driver.execute_script("arguments[0].click();", add_btn)
+            except ElementClickInterceptedException as e:
+                print(f"[WARN] Click intercepted: {e}. Trying JS click.")
+                driver.execute_script("arguments[0].click();", add_btn)
+            # Wait for cart modal or confirmation
+            WebDriverWait(driver, 5).until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, "#cartModal, .modal-content, .modal-backdrop"))
+            )
+            return
+        except StaleElementReferenceException as e:
+            print(f"[WARN] Stale element in add-to-cart, retrying ({attempt+1}/{max_retries}): {e}")
+            time.sleep(1)
+        except Exception as e:
+            print(f"[ERROR] Exception in add-to-cart: {e}")
+            time.sleep(1)
+    raise AssertionError("Failed to click Add to Cart after multiple retries.")
+
+@when('I click Continue Shopping button')
+def click_continue_shopping_button_step(context):
+    btn = WebDriverWait(context.behave_driver, 5).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "button.close-modal"))
+    )
+    btn.click()
+
+@then('I should see {count:d} item in the cart')
+def see_item_count_in_cart_step(context, count):
+    rows = context.behave_driver.find_elements(By.CSS_SELECTOR, "tbody tr[id^='product-']")
+    assert len(rows) == count, f"Expected {count} item(s) in cart, found {len(rows)}."
+
+@given('I have added a product to the cart')
+def have_added_product_to_cart_step(context):
+    context.execute_steps(u'When I navigate to the Products page')
+    context.execute_steps(u'When I hover over the first product and click Add to Cart')
     try:
-        wait_for_element(context, SELECTORS["username_field"]).send_keys(username)
-        wait_for_element(context, SELECTORS["password_field"]).send_keys(password)
-        wait_for_clickable(context, SELECTORS["login_submit_button"]).click()
-        time.sleep(2)
+        context.execute_steps(u'When I click Continue Shopping button')
     except Exception as e:
-        print(f"Login failed: {e}")
+        driver = context.behave_driver
+        try:
+            html = driver.page_source
+            print(f"[ERROR] Could not click Continue Shopping. Page HTML:\n{html[:2000]}")
+        except Exception as e2:
+            print(f"[ERROR] Could not get page HTML: {e2}")
+        raise
+    print("[DEBUG] Product should now be in cart.")
 
-# @when('I click the footer link "{link_text}"')
-# def step_click_footer_link(context: Context, link_text):
-#     link_xpath = f"//a[contains(text(), '{link_text}')]"
-    
-#     element = context.webdriver.find_element(By.XPATH, link_xpath)
-#     context.webdriver.execute_script("arguments[0].scrollIntoView(true);", element)
-    
-#     WebDriverWait(context.webdriver, 20).until(
-#         EC.element_to_be_clickable((By.XPATH, link_xpath))
-#     ).click()
+@when('I click the "X" button to remove the item')
+def click_remove_item_button_step(context):
+    context.behave_driver.find_element(By.CLASS_NAME, "cart_quantity_delete").click()
 
-@when('I change the quantity of "{product_name}" to "{quantity}"')
-def step_change_cart_quantity(context: Context, product_name, quantity):
-    """Changes quantity in cart."""
+@then('I should see that the cart is empty')
+def see_cart_is_empty_step(context):
+    # Wait for the row to disappear or the empty message
+    WebDriverWait(context.behave_driver, 5).until(
+        EC.invisibility_of_element_located((By.CLASS_NAME, "cart_quantity_delete"))
+    )
+    # Verify the empty text appears
+    body_text = context.behave_driver.find_element(By.ID, "empty_cart").text
+    assert "Cart is empty" in body_text
+
+# --- MISSING STEP DEFINITIONS ---
+
+@when('I increase the quantity to "{qty}"')
+def increase_quantity_step(context, qty):
+    driver = context.behave_driver
+    qty_input = driver.find_element(By.ID, "quantity")
+    qty_input.clear()
+    qty_input.send_keys(qty)
+
+@when('I click the Add to Cart button')
+def click_add_to_cart_button_step(context):
+    driver = context.behave_driver
+    add_btn = driver.find_element(By.CSS_SELECTOR, "button.add-to-cart, .product-information button")
+    driver.execute_script("arguments[0].scrollIntoView();", add_btn)
     try:
-        qty_field = wait_for_element(context, SELECTORS["quantity_field"])
-        qty_field.clear()
-        qty_field.send_keys(quantity)
-        time.sleep(2)
-    except Exception as e:
-        print(f"Change quantity failed: {e}")
+        add_btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", add_btn)
 
-@when('I click the "{button_text}" button')
-def step_click_generic_button(context: Context, button_text):
-    """Clicks a button by text."""
+@then('I should see "{qty}" items in the cart for that product')
+def see_qty_items_in_cart_for_product_step(context, qty):
+    driver = context.behave_driver
+    # Wait for the cart table and product row to appear
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "tbody tr[id^='product-']"))
+    )
+    # Find the first product row
+    row = driver.find_element(By.CSS_SELECTOR, "tbody tr[id^='product-']")
+    # Find the cart_quantity cell and its button
+    qty_cell = row.find_element(By.CLASS_NAME, "cart_quantity")
+    qty_btn = qty_cell.find_element(By.TAG_NAME, "button")
+    qty_text = qty_btn.text.strip()
+    print(f"[DEBUG] Cart quantity button value: {qty_text}")
+    assert qty_text == str(qty), f"Expected {qty} items in cart for product, found {qty_text}."
+
+@when('I scroll to the bottom of the page')
+def scroll_to_bottom_step(context):
+    driver = context.behave_driver
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+@then('I should see recommended products')
+def see_recommended_products_step(context):
+    driver = context.behave_driver
     try:
-        button = wait_for_clickable(context, f"//button[contains(text(), '{button_text}')]", by=By.XPATH)
-        button.click()
-        time.sleep(2)
+        section = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "recommended_items"))
+        )
+        assert section.is_displayed(), "Recommended items section is not visible."
     except Exception as e:
-        print(f"Click button '{button_text}' failed: {e}")
+        raise AssertionError(f"Recommended items section not found or not visible: {e}")
 
-@when('I click the mobile navigation menu')
-def step_click_mobile_menu(context: Context):
-    """Clicks mobile menu."""
+@when('I click Add to Cart on a recommended item')
+def add_to_cart_recommended_step(context):
+    driver = context.behave_driver
+    # Always navigate to the homepage (where recommended section is visible)
+    driver.get("https://automationexercise.com/")
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.XPATH, "//img[@alt='Website for automation practice']"))
+    )
+    close_ads_iframe(driver)
     try:
-        wait_for_clickable(context, SELECTORS["mobile_menu_button"]).click()
-        time.sleep(1)
+        section = WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "recommended_items"))
+        )
+        carousel_inner = section.find_element(By.CSS_SELECTOR, ".carousel-inner")
+        active_items = carousel_inner.find_elements(By.CSS_SELECTOR, ".item.active")
+        if not active_items:
+            print(f"[DEBUG] .carousel-inner HTML: {carousel_inner.get_attribute('outerHTML')}")
+            raise AssertionError("No .item.active found in recommended carousel.")
+        active_item = active_items[0]
+        btns = active_item.find_elements(By.CSS_SELECTOR, "a[data-product-id].add-to-cart")
+        if not btns:
+            print(f"[DEBUG] .item.active HTML: {active_item.get_attribute('outerHTML')}")
+            raise AssertionError("No a[data-product-id].add-to-cart found in .item.active.")
+        for i, b in enumerate(btns):
+            print(f"[DEBUG] Button {i} HTML: {b.get_attribute('outerHTML')}")
+        # Click the first visible button
+        for btn in btns:
+            if btn.is_displayed():
+                driver.execute_script("arguments[0].scrollIntoView();", btn)
+                try:
+                    btn.click()
+                except ElementClickInterceptedException as e:
+                    print(f"[WARN] Click intercepted: {e}. Trying JS click.")
+                    driver.execute_script("arguments[0].click();", btn)
+                except Exception as e:
+                    print(f"[ERROR] JS click also failed: {e}")
+                    raise AssertionError("Could not click Add to Cart on recommended item.")
+                return
+        print("[ERROR] No visible Add to Cart button found in recommended section.")
+        raise AssertionError("No visible Add to Cart button found in recommended section.")
     except Exception as e:
-        print(f"Click mobile menu failed: {e}")
+        print(f"[ERROR] Could not find Add to Cart in recommended section: {e}")
+        try:
+            print(f"[DEBUG] Full page HTML: {driver.page_source[:2000]}")
+            driver.save_screenshot("recommended_section_failure.png")
+            print("[DEBUG] Screenshot saved as recommended_section_failure.png")
+        except Exception as ex:
+            print(f"[DEBUG] Could not get page HTML or screenshot: {ex}")
+        raise AssertionError(f"Recommended item Add to Cart button not found or not clickable: {e}")
 
-@when('I click the link "{link_text}"')
-def step_click_link(context: Context, link_text):
-    """Clicks a link by text."""
+@when('I click View Cart in the modal')
+def click_view_cart_modal_step(context):
+    driver = context.behave_driver
+    # Wait for modal and click View Cart
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "#cartModal, .modal-content"))
+    )
+    view_cart_btn = driver.find_element(By.CSS_SELECTOR, "a[href='/view_cart']")
+    driver.execute_script("arguments[0].scrollIntoView();", view_cart_btn)
     try:
-        link = wait_for_clickable(context, f"//a[contains(text(), '{link_text}')]", by=By.XPATH)
-        link.click()
-        time.sleep(2)
-    except Exception as e:
-        print(f"Click link '{link_text}' failed: {e}")
+        view_cart_btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", view_cart_btn)
 
-
-@then('I should see the search results page')
-def step_should_see_results_page(context: Context):
-    """Verifies search results page."""
-    assert "search" in context.webdriver.current_url.lower() or len(context.webdriver.find_elements(By.CSS_SELECTOR, SELECTORS["product_card"])) > 0
-
-@then('the first product listed should be "{product_name}"')
-def step_first_product_is(context: Context, product_name):
-    """Verifies first product name."""
+@when('I click the scroll up arrow')
+def click_scroll_up_arrow_step(context):
+    driver = context.behave_driver
+    arrow = driver.find_element(By.ID, "scrollUp")
+    driver.execute_script("arguments[0].scrollIntoView();", arrow)
     try:
-        first_product = wait_for_element(context, SELECTORS["product_link_first"])
-        print(f"First product text: {first_product.text}")
-    except Exception as e:
-        print(f"Check first product failed: {e}")
+        arrow.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", arrow)
 
-@then('the current page title should be "{expected_title}"')
-def step_page_title_is(context: Context, expected_title):
-    """Verifies page title."""
-    time.sleep(2)
-    print(f"Current title: {context.webdriver.title}")
+@then('I should see the main slider text "{text}"')
+def see_main_slider_text_step(context, text):
+    driver = context.behave_driver
+    slider = driver.find_element(By.CSS_SELECTOR, ".carousel-inner .item.active h2")
+    assert text in slider.text
 
-@then('the cart icon count should be "{count}"')
-def step_cart_count_is(context: Context, count):
-    """Verifies cart count."""
+@when('I scroll up to the top manually')
+def scroll_up_to_top_manually_step(context):
+    driver = context.behave_driver
+    driver.execute_script("window.scrollTo(0, 0);")
+
+@when('I click Proceed to Checkout')
+def click_proceed_to_checkout_step(context):
+    driver = context.behave_driver
+    close_ads_iframe(driver)
     try:
-        cart_badge = wait_for_element(context, SELECTORS["cart_count"])
-        print(f"Cart count: {cart_badge.text}")
+        btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.check_out"))
+        )
+        driver.execute_script("arguments[0].scrollIntoView();", btn)
+        try:
+            btn.click()
+        except ElementClickInterceptedException as e:
+            print(f"[WARN] Click intercepted: {e}. Trying JS click.")
+            driver.execute_script("arguments[0].click();", btn)
+        except Exception as e:
+            print(f"[ERROR] JS click also failed: {e}")
+            raise AssertionError("Could not click Proceed to Checkout.")
     except Exception as e:
-        print(f"Check cart count failed: {e}")
+        raise AssertionError(f"Proceed to Checkout button not found or not clickable: {e}")
 
-@then('I should see a success message "{message}"')
-def step_should_see_success_message(context: Context, message):
-    """Verifies success message."""
-    print(f"Looking for success message: {message}")
+@then('I should see the checkout modal requesting login')
+def see_checkout_modal_login_step(context):
+    driver = context.behave_driver
+    modal = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.ID, "checkoutModal"))
+    )
+    assert modal.is_displayed()
 
-@then('I should see a warning message "{message}"')
-def step_should_see_warning_message(context: Context, message):
-    """Verifies warning message."""
-    print(f"Looking for warning message: {message}")
-
-@then('I should see the "{product_name}" listed in the shopping cart')
-def step_product_listed_in_cart(context: Context, product_name):
-    """Checks if product is in cart."""
-    print(f"Looking for product in cart: {product_name}")
-
-@then('I should be on the "{page_name}" page')
-def step_on_specific_page(context: Context, page_name):
-    """Verifies current page."""
-    print(f"Current URL: {context.webdriver.current_url}")
-
-@then('I should not see the "Sign In" form')
-def step_should_not_see_signin_form(context: Context):
-    """Checks sign-in form is not visible."""
-    print("Checking sign-in form is not visible")
-
-@then('I should see a field to enter my email address')
-def step_should_see_email_field(context: Context):
-    """Verifies email field exists."""
-    print("Checking for email field")
-
-@then('the new order total should be "{price}"')
-def step_new_order_total_is(context: Context, price):
-    """Verifies order total."""
-    print(f"Checking order total: {price}")
-
-@then('I should be logged in as "{username}"')
-def step_logged_in_as(context: Context, username):
-    """Checks if logged in."""
-    print(f"Checking if logged in as: {username}")
-
-@then('the total price displayed should update dynamically')
-def step_total_price_updates(context: Context):
-    """Placeholder for dynamic price update."""
-    print("Checking total price updates")
-
-@then('the quantity field for "{product_name}" should show "{quantity}"')
-def step_quantity_field_value(context: Context, product_name, quantity):
-    """Checks quantity field value."""
-    print(f"Checking quantity field shows: {quantity}")
-
-@then('the current page URL should contain "{substring}"')
-def step_url_contains(context: Context, substring):
-    """Verifies URL contains substring."""
-    assert substring in context.webdriver.current_url
-
-@then('I should see the heading "{text}"')
-def step_see_heading(context: Context, text):
-    """Checks for heading."""
-    print(f"Looking for heading: {text}")
-
-@then('the element with id "{element_id}" should be visible')
-def step_element_is_visible(context: Context, element_id):
-    """Checks if element is visible."""
+@when('I click on the "{category}" category')
+def click_sidebar_category_step(context, category):
+    driver = context.behave_driver
+    # Find the sidebar category link by href and text
+    xpath = f"//div[@class='left-sidebar']//a[@data-toggle='collapse' and contains(., '{category}') and @href='#{category}']"
     try:
-        element = context.webdriver.find_element(By.ID, element_id)
-        assert element.is_displayed()
+        WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.XPATH, xpath))
+        )
+        elem = driver.find_element(By.XPATH, xpath)
+        driver.execute_script("arguments[0].scrollIntoView();", elem)
+        try:
+            elem.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", elem)
     except Exception as e:
-        print(f"Element {element_id} check failed: {e}")
+        print(f"[ERROR] Could not click category '{category}': {e}")
 
-@then('I should see a message "{message}"')
-def step_should_see_message(context: Context, message):
-    """Verifies message appears."""
-    print(f"Looking for message: {message}")
+@when('I click on the "{sub_category}" sub-category')
+def click_sidebar_sub_category_step(context, sub_category):
+    driver = context.behave_driver
+    # Sub-category links are inside the expanded panel for the category
+    xpath = f"//div[@class='panel-collapse in']//ul/li/a[contains(., '{sub_category}') or normalize-space(text())='{sub_category}']"
+    try:
+        WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.XPATH, xpath))
+        )
+        elem = driver.find_element(By.XPATH, xpath)
+        driver.execute_script("arguments[0].scrollIntoView();", elem)
+        try:
+            elem.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", elem)
+    except Exception as e:
+        print(f"[ERROR] Could not click sub-category '{sub_category}': {e}")
 
-@then('I should be redirected to the "{page_name}" page')
-def step_redirected_to_page(context: Context, page_name):
-    """Verifies redirection."""
-    print(f"Checking redirection to: {page_name}")
+@then('I should see "{text}" in the page header')
+def see_page_header_text_step(context, text):
+    header = WebDriverWait(context.behave_driver, 5).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "h2.title.text-center"))
+    )
+    assert text in header.text
 
-@then('I should see the confirmation number')
-def step_see_confirmation_number(context: Context):
-    """Checks for confirmation number."""
-    print("Looking for confirmation number")
+@when('I click on the "{brand}" brand in the sidebar')
+def click_sidebar_brand_step(context, brand):
+    driver = context.behave_driver
+    # Brand links are in the brands-name list, match by href and text
+    xpath = f"//div[@class='brands-name']//a[contains(@href, '/brand_products') and contains(., '{brand}') or normalize-space(text())='{brand}']"
+    try:
+        WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.XPATH, xpath))
+        )
+        elem = driver.find_element(By.XPATH, xpath)
+        driver.execute_script("arguments[0].scrollIntoView();", elem)
+        try:
+            elem.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", elem)
+    except Exception as e:
+        print(f"[ERROR] Could not click brand '{brand}': {e}")
 
-@then('I should see my name "{name}" in the header')
-def step_see_name_in_header(context: Context, name):
-    """Checks for name in header."""
-    print(f"Looking for name in header: {name}")
+@when('I click View Product on the first item')
+def click_view_product_first_item_step(context):
+    driver = context.behave_driver
+    close_ads_iframe(driver)
+    try:
+        elem = driver.find_element(By.CSS_SELECTOR, ".choose a")
+        driver.execute_script("arguments[0].scrollIntoView();", elem)
+        try:
+            elem.click()
+        except ElementClickInterceptedException as e:
+            print(f"[WARN] Click intercepted: {e}. Trying JS click.")
+            driver.execute_script("arguments[0].click();", elem)
+        except Exception as e:
+            print(f"[ERROR] JS click also failed: {e}")
+            raise AssertionError("Could not click View Product link.")
+    except Exception as e:
+        raise AssertionError(f"View Product link not found or not clickable: {e}")
 
-@then('I should remain on the login page')
-def step_remain_on_login_page(context: Context):
-    """Verifies still on login page."""
-    assert "login" in context.webdriver.current_url
+@when('I submit a review with name "{name}", email "{email}", and message "{msg}"')
+def submit_review_step(context, name, email, msg):
+    WebDriverWait(context.behave_driver, 5).until(
+        EC.visibility_of_element_located((By.ID, "name"))
+    )
+    context.behave_driver.find_element(By.ID, "name").send_keys(name)
+    context.behave_driver.find_element(By.ID, "email").send_keys(email)
+    context.behave_driver.find_element(By.ID, "review").send_keys(msg)
+    context.behave_driver.find_element(By.ID, "button-review").click()
 
-@then('I should see the link "{link_text}" in the menu')
-def step_see_link_in_menu(context: Context, link_text):
-    """Checks for link in menu."""
-    print(f"Looking for link in menu: {link_text}")
-
-@then('I should see a button to "{button_text}"')
-def step_see_button(context: Context, button_text):
-    """Checks for button."""
-    print(f"Looking for button: {button_text}")
-
-@then('my review should appear in the "{section}" section')
-def step_review_in_section(context: Context, section):
-    """Checks review appears."""
-    print(f"Looking for review in: {section}")
-
-@then('the product "{product_name}" should be visible')
-def step_product_is_visible(context: Context, product_name):
-    """Checks product is visible."""
-    print(f"Checking product is visible: {product_name}")
-
-@then('the product "{product_name}" should not be visible')
-def step_product_is_not_visible(context: Context, product_name):
-    """Checks product is not visible."""
-    print(f"Checking product is not visible: {product_name}")
-
-@then('the wishlist count in the header should be greater than "{count}"')
-def step_wishlist_count_greater_than(context: Context, count):
-    """Checks wishlist count."""
-    print(f"Checking wishlist count > {count}")
-
-@then('I should remain on the "{page_name}" page')
-def step_remain_on_page(context: Context, page_name):
-    """Checks still on same page."""
-    print(f"Checking remain on page: {page_name}")
-
-@then('I should see a validation error message "{message}"')
-def step_see_validation_error(context: Context, message):
-    """Checks for validation error."""
-    print(f"Looking for validation error: {message}")
-
-@then('the last product listed should be "{product_name}"')
-def step_last_product_is(context: Context, product_name):
-    """Checks last product."""
-    print(f"Checking last product: {product_name}")
-
-@when('I fill in the address field "{field_name}" with "{value}"')
-def step_fill_address_field(context: Context, field_name, value):
-    """Fills address field."""
-    print(f"Filling {field_name} with {value}")
-
-@when('I leave the field "{field_name}" empty')
-def step_leave_field_empty(context: Context, field_name):
-    """Leaves field empty."""
-    print(f"Leaving field empty: {field_name}")
-
-@when('I leave a {rating}-star review with comment "{comment}"')
-def step_leave_review(context: Context, rating, comment):
-    """Leaves a review."""
-    print(f"Leaving {rating}-star review: {comment}")
-
-@when('I filter products by price range "{min_price}" to "{max_price}"')
-def step_filter_by_price(context: Context, min_price, max_price):
-    """Filters by price."""
-    print(f"Filtering by price: {min_price} to {max_price}")
-
-@when('I select the sort option "{option_text}"')
-def step_select_sort_option(context: Context, option_text):
-    """Selects sort option."""
-    print(f"Selecting sort option: {option_text}")
-
-@when('I enter the discount code "{code}"')
-def step_enter_discount_code(context: Context, code):
-    """Enters discount code."""
-    print(f"Entering discount code: {code}")
-
-@when('I click the apply button')
-def step_click_apply_button(context: Context):
-    """Clicks apply button."""
-    print("Clicking apply button")
+@then('I should see the review success message "{message}"')
+def see_review_success_message_step(context, message):
+    element = WebDriverWait(context.behave_driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".alert-success span"))
+    )
+    assert message in element.text
