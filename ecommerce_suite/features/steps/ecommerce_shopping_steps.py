@@ -464,10 +464,8 @@ def add_to_cart_recommended_step(context):
         print(f"[ERROR] Could not find Add to Cart in recommended section: {e}")
         try:
             print(f"[DEBUG] Full page HTML: {driver.page_source[:2000]}")
-            driver.save_screenshot("recommended_section_failure.png")
-            print("[DEBUG] Screenshot saved as recommended_section_failure.png")
         except Exception as ex:
-            print(f"[DEBUG] Could not get page HTML or screenshot: {ex}")
+            print(f"[DEBUG] Could not get page HTML: {ex}")
         raise AssertionError(f"Recommended item Add to Cart button not found or not clickable: {e}")
 
 @when('I click View Cart in the modal')
