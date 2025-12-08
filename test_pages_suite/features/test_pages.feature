@@ -10,7 +10,7 @@ Feature:
 
     #2
     Scenario: I click on the link
-        When I click on the link "partial link text link"
+        When I click on the element "partial link text link"
         Then I expect the url to contain "#approaches"
 
     #3
